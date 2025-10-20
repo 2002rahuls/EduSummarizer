@@ -52,3 +52,4 @@ def summarize_text(text, max_len=150, min_len=60):
         result = summarizer(chunk, max_length=max_len, min_length=min_len, do_sample=False)
         summaries.append(result[0]["summary_text"])
     return " ".join(summaries)
+
