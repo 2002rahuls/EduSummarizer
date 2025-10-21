@@ -8,7 +8,8 @@ logger = logging.getLogger(__name__)
 
 
 # Lazy-loaded model variables
-_MODEL_NAME = "./model/pegasus-xsum-local"
+
+_MODEL_NAME = "google/pegasus-xsum"
 _pipeline = None
 _model_available = False
 _device = -1
