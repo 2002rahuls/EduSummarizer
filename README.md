@@ -165,3 +165,76 @@ This project is a learning/demo project. Adapt, reuse, and extend as you like.
 ## What changed
 
 This README was generated/updated to reflect current project files and how to run the API locally (Windows PowerShell examples). If you want a macOS/Linux command snippet set or more advanced examples (async client, Dockerfile, CI), tell me which you prefer and I will add them.
+
+## Deploy to Google Cloud Run
+
+Use Google Cloud Run to deploy this containerized service. The commands below assume you have the Google Cloud SDK installed, are logged in (`gcloud auth login`), and have selected the target project (`gcloud config set project YOUR_PROJECT_ID`).
+
+1. Build the container image and push to Artifact Registry or Container Registry. Example using Cloud Build (recommended):
+
+```powershell
+# Build and push with Cloud Build (Cloud Build will create the image and push to gcr or artifact registry according to your project settings)
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/edusummarizer:latest .
+```
+
+Or build locally and push (replace registry path as needed):
+
+```powershell
+# Local build
+docker build -t gcr.io/YOUR_PROJECT_ID/edusummarizer:latest .
+# Push
+docker push gcr.io/YOUR_PROJECT_ID/edusummarizer:latest
+```
+
+2. Deploy to Cloud Run:
+
+```powershell
+gcloud run deploy edusummarizer \
+  --image gcr.io/YOUR_PROJECT_ID/edusummarizer:latest \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --memory 1Gi \
+  --concurrency 1 \
+  --max-instances 3 \
+  --set-env-vars PORT=8080
+```
+
+Recommended flags explanation:
+
+- `--region`: choose a region near your users (`us-central1` is an example).
+- `--memory`: set to `1Gi` (or higher) because `transformers`/`torch` can use significant RAM. For production, consider 2Gi or 4Gi depending on model size.
+- `--concurrency`: set low (1) if using models that are CPU/memory heavy so requests don't compete for RAM; higher concurrency can be used for lightweight fallback-only runs.
+- `--max-instances`: limit to control costs and cold-start behavior.
+- `--set-env-vars PORT=8080`: Cloud Run injects `PORT` automatically, but this makes it explicit; the Dockerfile reads `$PORT`.
+
+Service account & permissions:
+
+- Create a service account for the Cloud Run service if it needs to access Firestore or other GCP services:
+
+```powershell
+# Create service account
+gcloud iam service-accounts create edusummarizer-sa --display-name "EduSummarizer service account"
+
+# Grant Firestore (Datastore) user role as an example
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+  --member="serviceAccount:edusummarizer-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/datastore.user"
+```
+
+Then deploy with the service account:
+
+```powershell
+gcloud run deploy edusummarizer \
+  --image gcr.io/YOUR_PROJECT_ID/edusummarizer:latest \
+  --region us-central1 \
+  --platform managed \
+  --service-account edusummarizer-sa@YOUR_PROJECT_ID.iam.gserviceaccount.com \
+  --memory 1Gi \
+  --concurrency 1
+```
+
+Notes:
+
+- If your app uses Firestore, either set the `GOOGLE_APPLICATION_CREDENTIALS` secret at deploy time or assign the service account the appropriate IAM role so Cloud Run can access Firestore directly.
+- For heavy model usage, consider using a larger machine (2Gi/4Gi) or serving models separately (Vertex AI Prediction, a dedicated VM, or GKE with GPUs).
